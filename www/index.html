@@ -25,9 +25,6 @@
         <title>Hello World</title>
 		<style>
 			svg {
-				/* fill: #ffc; */
-				fill: transparent;
-				border: solid 1px #ccc;
 				/*-webkit-backface-visibility: hidden;*/
 			}
 		
@@ -75,7 +72,7 @@
 				bottom: 0;
 				left: 0;
 				right: 0;
-				border: solid 1px Red;
+				fill: #eff;
 			}
 		</style>
 		
@@ -124,16 +121,10 @@
 						<!-- ko template: template -->
 						<!-- /ko --> 
 					<!-- /ko --> 
-					
-					
-
 				</g>
 			</svg>
 		</script>
 	
-		<div>
-			S		<input type="range" min="10" max="400" data-bind="value: size">
-		</div>
 		<svg id="top">
 			<defs>
 				<filter id="f1" x="0" y="0">
@@ -146,7 +137,7 @@
 			<!-- /ko --> 
 			
 			<g>
-				<text x="0" y="15" fill="red" data-bind="text: dimensions" class="label"></text>
+
 			</g>
 		  Sorry, your browser does not support inline SVG.  
 		</svg> 
@@ -381,23 +372,13 @@
 		
 		var vm = new Vm();
 		var clock = new Clock();
-		clock.x(10);
-		clock.y(10);
-		clock.size(100);
-		
-		
+	
+		clock.x(15);
+		clock.y(15);
+		var top = $("#top");
+		clock.size(($(window).width() < $(window).height() ? $(window).width() : $(window).height()) - 30);
+	
 		vm.points.push(clock);
-		
-		/*
-		var clock2 = new Clock();
-		clock2.x(300);
-		clock2.y(100);
-		clock2.size(100);
-		*/
-		
-		//vm.points.push(clock2);
-		
-		
 		
 		
 		ko.applyBindings(vm, $("body")[0]);
