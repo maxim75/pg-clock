@@ -22,21 +22,384 @@
         <meta charset="utf-8" />
         <meta name="format-detection" content="telephone=no" />
         <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width, height=device-height, target-densitydpi=device-dpi" />
-        <link rel="stylesheet" type="text/css" href="css/index.css" />
         <title>Hello World</title>
+		<style>
+			svg {
+				/* fill: #ffc; */
+				fill: transparent;
+				border: solid 1px #ccc;
+				/*-webkit-backface-visibility: hidden;*/
+			}
+		
+			.label {
+				fill: #000;
+				z-index: 100;
+			}
+			
+			.point {
+				fill: #ddd;
+				stroke-width: 1;
+				-webkit-transition: all 350ms;  
+			}
+			
+			circle {
+				/* fill: #eee; */
+				stroke-width: 1;
+				stroke: #eee;
+				border: solid 1px #ccc;
+			}
+			
+			.seconds-arrow {
+				stroke: #f00;
+			}
+			
+			.minutes-arrow {
+				stroke-width: 4;
+			}
+			
+			.hours-arrow {
+				stroke-width: 4;
+			}
+			
+			.clock-label {
+				fill: #ddd;
+				stroke: #000;
+				text-anchor: middle;
+				font-size: 10px;
+				dominant-baseline: central;
+			}
+			
+			#top {
+				position: absolute;
+				top: 50px;
+				bottom: 0;
+				left: 0;
+				right: 0;
+				border: solid 1px Red;
+			}
+		</style>
+		
     </head>
     <body>
-        <div class="app">
-            <h1>PhoneGap</h1>
-            <div id="deviceready" class="blink">
-                <p class="event listening">Connecting to Device</p>
-                <p class="event received">Device is Ready</p>
-            </div>
-        </div>
         <script type="text/javascript" src="phonegap.js"></script>
-        <script type="text/javascript" src="js/index.js"></script>
+        <script type="text/javascript" src="js/jquery-2.0.3.js"></script>
+		<script type="text/javascript" src="js/knockout-3.0.0.js"></script>
+		<script type="text/javascript" src="js/pubsub.js"></script>
+		<script type="text/javascript" src="js/index.js"></script>
         <script type="text/javascript">
             app.initialize();
         </script>
+		
+		<script type="text/html" id="template-point">
+			<svg>
+				<path data-bind="attr: {d:path}, style: { fill: fill, 'fill-opacity': fillOpacity }" fill="#eee" />
+			</svg>
+		</script>
+		
+		<script type="text/html" id="template-arrow">
+			<svg>
+				<line data-bind="attr: { x1: centerX, y1: centerY, x2: endX, y2: endY, class: cssclass }" stroke="#ccc" stroke-width="1"/>
+			</svg>
+		</script>
+		
+		<script type="text/html" id="template-tick">
+			<svg>
+				<line data-bind="attr: { x1: x1, y1: y1, x2: x2, y2: y2 }" stroke="#ccc" stroke-width="1"/>
+			</svg>
+		</script>
+		
+		<script type="text/html" id="template-label">
+			<svg>
+				<text data-bind="attr: { x: x, y: y}, text: text"  class="clock-label" />
+			</svg>
+		</script>
+		
+		<script type="text/html" id="template-clock">
+			<svg>
+				<g data-bind="attr: { transform: transform }">
+					
+					<circle data-bind="attr: { cx: circleX, cy: circleY, r: circleR }"  />
+					
+					<!-- ko foreach: elements -->
+						<!-- ko template: template -->
+						<!-- /ko --> 
+					<!-- /ko --> 
+					
+					
+
+				</g>
+			</svg>
+		</script>
+	
+		<div>
+			S		<input type="range" min="10" max="400" data-bind="value: size">
+		</div>
+		<svg id="top">
+			<defs>
+				<filter id="f1" x="0" y="0">
+				  <feGaussianBlur in="SourceGraphic" stdDeviation="5" />
+				</filter>
+			  </defs>
+			<!-- ko foreach: points -->
+				<!-- ko template: template -->
+				<!-- /ko --> 
+			<!-- /ko --> 
+			
+			<g>
+				<text x="0" y="15" fill="red" data-bind="text: dimensions" class="label"></text>
+			</g>
+		  Sorry, your browser does not support inline SVG.  
+		</svg> 
     </body>
+	<script>
+		// .NET like string.format function
+		String.prototype.format = function () {
+			var args = arguments;
+			return this.replace(/{(\d+)}/g, function (match, number) {
+				return typeof args[number] != 'undefined'
+				  ? args[number]
+				  : match;
+			});
+		};
+	
+		var ArrowBase = function(options) {
+			var self = this;
+			
+			self.centerX = ko.computed(function() { return options.clock.size()/2 });
+			self.centerY = ko.computed(function() { return options.clock.size()/2 });
+			
+			self.size = ko.computed(function() { return options.clock.size()/2*options.size; });
+			
+			self.date = ko.observable(new Date());
+			
+			self.vectorX = function(r, angle) {
+				return options.clock.size()/2 + (r()*Math.cos(Math.PI*(angle-90)/180));
+			};
+			
+			self.vectorY = function(r, angle) {
+				return options.clock.size()/2 + (r()*Math.sin(Math.PI*(angle-90)/180));
+			};
+			
+			self.arrowAngle = ko.computed(function() {
+				return 0;
+			});
+			
+			self.endX = ko.computed(function() {
+				self.date();
+				return self.vectorX(self.size, self.arrowAngle());
+			});
+			
+			self.endY = ko.computed(function() {
+				self.date();
+				return self.vectorY(self.size, self.arrowAngle());
+			});
+			
+			self.onTick = function() {
+				self.date(new Date());
+			};
+			
+			self.tickToken = PubSub.subscribe("tick", self.onTick);
+			self.template = "template-arrow";
+			self.cssclass = ko.observable("minutes-arrow");
+		};
+	
+		var SecondsArrow = function(options) {
+			var self = this;
+			var base = new ArrowBase(options);
+			ko.utils.extend(self, base);
+			
+			base.arrowAngle = ko.computed(function() {
+				return (self.date().getSeconds() + self.date().getMilliseconds()/1000)/60*360;
+			});
+			
+			base.cssclass("seconds-arrow");
+		};
+		
+		var MinutesArrow = function(options) {
+			var self = this;
+			var base = new ArrowBase(options);
+			ko.utils.extend(self, base);
+			
+			base.arrowAngle = ko.computed(function() {
+				return (self.date().getMinutes()/60)*360;
+			});
+			
+			base.cssclass("minutes-arrow");
+		};
+		
+		var HoursArrow = function(options) {
+			var self = this;
+			var base = new ArrowBase(options);
+			ko.utils.extend(self, base);
+			
+			base.arrowAngle = ko.computed(function() {
+				return ((self.date().getHours()%12+self.date().getMinutes()/60)/12)*360;
+			});
+
+			base.cssclass("hours-arrow");
+		};
+	
+		var Tick = function(options) {
+			var self = this;
+			
+			self.pos = options.pos;
+			self.template = "template-tick";
+			
+			self.size = function() {
+				return self.pos % 5 == 0 ? .8 : .95;
+			};
+			
+			self.x1 = ko.computed(function() { 
+				return options.clock.size()/2 + (options.clock.size()/2*Math.cos(Math.PI*(self.pos/60*360-90)/180));
+			});
+			self.y1 = ko.computed(function() { 
+				return options.clock.size()/2 + (options.clock.size()/2*Math.sin(Math.PI*(self.pos/60*360-90)/180));
+			});
+			self.x2 = ko.computed(function() { 
+				return options.clock.size()/2 + (options.clock.size()/2*self.size()*Math.cos(Math.PI*(self.pos/60*360-90)/180));
+			});
+			self.y2 = ko.computed(function() { 
+				return options.clock.size()/2 + (options.clock.size()/2*self.size()*Math.sin(Math.PI*(self.pos/60*360-90)/180)); 
+			});
+		};
+		
+		var Label = function(options) {
+			var self = this;
+			
+			self.pos = options.pos;
+			self.template = "template-label";
+			
+			self.size = function() {
+				return .7 ;
+			};
+			
+			self.text = ko.computed(function() {
+				return self.pos == 0 ? 12 : self.pos;
+			});
+			
+			self.x = ko.computed(function() { 
+				return options.clock.size()/2 + (options.clock.size()/2*self.size()*Math.cos(Math.PI*(self.pos/12*360-90)/180));
+			});
+			self.y = ko.computed(function() { 
+				return options.clock.size()/2 + (options.clock.size()/2*self.size()*Math.sin(Math.PI*(self.pos/12*360-90)/180)); 
+			});
+		};
+	
+		var Clock = function() {
+			var self = this;
+			
+			self.size = ko.observable(100);
+			self.x = ko.observable(100);
+			self.y = ko.observable(100);
+			self.rotate = ko.observable(0);
+			
+			self.elements = ko.observableArray();
+			
+			self.elements.push(new SecondsArrow({ clock: self, size: .95 }));
+			self.elements.push(new MinutesArrow({ clock: self, size: .9 }));
+			self.elements.push(new HoursArrow({ clock: self, size: .7 }));
+			
+			for(var i=0; i<60; i++) {
+				self.elements.push(new Tick({ clock: self, pos: i }));
+			}
+			
+			for(var i=0; i<12; i++) {
+				self.elements.push(new Label({ clock: self, pos: i }));
+			}
+			
+			self.circleX = ko.computed(function() {
+				return self.size()/2;
+			});
+			
+			self.circleY = ko.computed(function() {
+				return self.size()/2;
+			});
+			
+			self.circleR = ko.computed(function() {
+				return self.size()/2;
+			});
+			
+			self.transform = ko.computed(function() {
+				return "translate({0}, {1}) rotate({2} {3} {3})".format(self.x(), self.y(), self.rotate(), self.size()/2); 
+			});
+			
+			self.onTick = function() {
+				//self.rotate(self.rotate()+1);
+			};
+			
+			self.tickToken = PubSub.subscribe("tick", self.onTick);
+			
+			self.template = ko.observable("template-clock");
+		};
+	
+		var Vm = function() {
+			var self = this;
+			self.screenWidth = ko.observable();
+			self.screenHeight = ko.observable();
+			self.points = ko.observableArray();
+			
+			self.onRemove = function(event, point) {
+				self.points.remove(point);
+			};
+			
+			PubSub.subscribe("remove", self.onRemove);
+			
+			setInterval(function() { PubSub.publish("tick"); }, 100);
+			
+			self.dimensions = ko.computed(function() { return self.screenWidth() + "x" + self.screenHeight() + " " + self.points().length; });
+			
+			var top = $("#top");
+			
+			self.setDimensions = function() {
+				self.screenWidth(top.width());
+				self.screenHeight(top.height());
+			};
+			
+			$(window).on("resize", function() {
+				self.setDimensions();
+			});
+			
+			self.setDimensions();
+			
+			self.onTick = function() {
+				return;
+				for(i=0; i<2; i++)
+				{
+					var x = Math.round(Math.random()*self.screenWidth());
+					var y = Math.round(Math.random()*self.screenHeight());
+					self.points.push(new Point(x, y, "click"));
+				}
+			};
+			
+			self.tickToken = PubSub.subscribe("tick", self.onTick);
+			
+			self.size = ko.computed({
+				read: function() { self.points().length > 0 ? self.points()[0].size() : 100; },
+				write: function(x) { self.points()[0].size(x); }
+			});
+		};
+		
+		var vm = new Vm();
+		var clock = new Clock();
+		clock.x(10);
+		clock.y(10);
+		clock.size(100);
+		
+		
+		vm.points.push(clock);
+		
+		/*
+		var clock2 = new Clock();
+		clock2.x(300);
+		clock2.y(100);
+		clock2.size(100);
+		*/
+		
+		//vm.points.push(clock2);
+		
+		
+		
+		
+		ko.applyBindings(vm, $("body")[0]);
+	</script>
 </html>
